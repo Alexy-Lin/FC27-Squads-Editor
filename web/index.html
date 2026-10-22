@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FC26 存档编辑器</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark">26</div>
+      <div>
+        <h1>FC26 存档编辑器</h1>
+        <p id="savePath">正在加载存档…</p>
+      </div>
+    </div>
+    <nav class="tabs" aria-label="编辑器页面">
+      <button class="tab active" data-view="players">球员编辑</button>
+      <button class="tab" data-view="teams">球队编辑</button>
+      <button class="tab" data-view="transfers">快捷转会</button>
+      <button class="tab" data-view="exactTransfers">精确转会</button>
+      <button class="tab" data-view="national">国家队选拔</button>
+      <button class="tab" data-view="quick">快捷功能</button>
+    </nav>
+    <div class="header-actions">
+      <span class="pending-badge" id="pendingBadge">0 项待保存</span>
+      <button class="button ghost" id="openButton">打开存档</button>
+      <button class="button ghost" id="resetButton">放弃修改</button>
+      <button class="button primary" id="saveButton">保存为新存档</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="quickView" class="quick-page view">
+      <div class="quick-hero panel">
+        <div>
+          <span class="eyebrow">QUICK FEATURES</span>
+          <h2>快捷功能</h2>
+          <p>常用批量操作集中在这里。点击后先应用到内存，确认无误后再点击顶部“保存为新存档”。</p>
+        </div>
+        <span class="quick-safe-badge">安全写入 · 新文件保存</span>
+      </div>
+      <div class="quick-grid">
+        <article class="panel quick-card">
+          <div class="quick-card-icon">◎</div>
+          <div>
+            <span class="eyebrow">ROSTER AGE</span>
+            <h2>全员年龄调整</h2>
+          </div>
+          <p>按目标年龄统一调整：保留每名球员真实的月日，只改年份。执行前自动记录生日快照，可随时恢复。</p>
+          <div class="quick-form">
+            <label>目标年龄 <input id="quickAgeValue" type="number" min="3" max="60" value="18"></label>
+            <button id="quickAgePreview" class="button ghost">预览</button>
+            <button id="quickAgeApply" class="button primary">应用全员年龄</button>
+          </div>
+          <p id="quickAgeStatus" class="quick-status">修改会先暂存，确认后点击顶部“保存为新存档”。</p>
+          <div class="quick-card-actions">
+            <button id="quickRestoreBirthdays" class="button ghost">恢复原始生日（快照）</button>
+            <button id="quickRestoreRealBirthdays" class="button ghost">恢复真实生日（内置）</button>
+          </div>
+        </article>
+        <article class="panel quick-card">
+          <div class="quick-card-icon">▲</div>
+          <div>
+            <span class="eyebrow">VETERAN PEAK</span>
+            <h2>现役老将回归巅峰</h2>
+          </div>
+          <p>FIFA19 峰值优先，FIFA19 没有的球员用 3DM 存档峰值兜底；只升不降，自动排除传奇 / ICON 与同名球员。</p>
+          <div class="quick-form">
+            <label>最小年龄 <input id="peakMinAge" type="number" min="18" max="45" value="30"></label>
+            <label>最低峰值 <input id="peakMinOvr" type="number" min="60" max="99" value="85"></label>
+            <button id="peakPreview" class="button ghost">查看名单</button>
+            <button id="peakApply" class="button primary">恢复巅峰</button>
+          </div>
+          <p id="peakStatus" class="quick-status">修改会先暂存，确认后点击顶部“保存为新存档”。</p>
+        </article>
+        <article class="panel quick-card">
+          <div class="quick-card-icon">＋</div>
+          <div>
+            <span class="eyebrow">MISSING PLAYERS</span>
+            <h2>补齐缺失球员</h2>
+          </div>
+          <p>与官方存档对比，把真正缺失的球员以自由球员身份补回；同名换 ID 与占位记录会跳过。</p>
+          <div class="quick-form">
+            <label class="quick-grow">官方存档 <input id="missingSource" type="text" placeholder="选择或粘贴官方 Squads 存档完整路径"></label>
+            <button id="missingPick" class="button ghost">选择文件</button>
+            <button id="missingScan" class="button ghost">扫描</button>
+            <button id="missingApply" class="button primary" disabled>补齐到当前存档</button>
+          </div>
+          <p id="missingStatus" class="quick-status">先选择一个官方存档，再点击扫描查看缺失名单。</p>
+        </article>
+        <article class="panel quick-card">
+          <div class="quick-card-icon trophy">★</div>
+          <div>
+            <span class="eyebrow">LEGEND PLAYERS</span>
+            <h2>添加缺失传奇球员</h2>
+          </div>
+          <p id="legendSummary">正在检查当前存档中的缺失传奇球员…</p>
+          <div id="legendPreview" class="legend-preview"></div>
+          <div class="quick-card-actions">
+            <button id="quickAddLegends" class="button primary" disabled>一键添加缺失传奇</button>
+            <label class="quick-check"><input id="legendIncludeWomen" type="checkbox"> 包含女足传奇</label>
+            <span class="quick-status">默认只补男足球星（含 Kempes、Rivellino），以自由球员身份加入并写入真实生日与姓名行；女足 ICON 需勾选上面的复选框。</span>
+          </div>
+        </article>
+      </div>
+      <dialog id="listDialog" class="list-dialog">
+        <header class="list-dialog-head">
+          <h2 id="listTitle">名单</h2>
+          <button id="listClose" class="button ghost">关闭</button>
+        </header>
+        <p id="listSummary" class="list-summary"></p>
+        <div id="listBody" class="list-body"></div>
+      </dialog>
+    </section>
+    <section id="nationalView" class="national-page view">
+      <div class="national-columns">
+        <article class="panel national-card">
+          <div class="national-card-heading">
+            <h2>入选名单 <span id="nationalCount" class="count">0 / 26 人</span></h2>
+            <div class="field national-team-picker">
+              <div class="gender-toggle" id="nationalGenderToggle" role="group" aria-label="男足 / 女足">
+                <button type="button" class="gender-option active" data-gender="0">男足</button>
+                <button type="button" class="gender-option" data-gender="1">女足</button>
+              </div>
+              <select id="nationalTeam" aria-label="国家队"><option value="">请选择国家队</option></select>
+            </div>
+          </div>
+          <p id="nationalStatus" role="status">尚未选择国家队</p>
+          <div id="nationalRoster" class="national-list"></div>
+          <div class="sticky-actions">
+            <button id="nationalReload" class="button ghost" disabled>重置草稿</button>
+            <button id="nationalAutoNumbers" class="button ghost" disabled>按位置自动编号（经典号码）</button>
+            <button id="nationalAutoBySort" class="button ghost" disabled>按当前排序编号</button>
+            <button id="nationalApply" class="button primary" disabled>应用选拔与号码</button>
+          </div>
+        </article>
+        <article class="panel national-card">
+          <div class="national-card-heading">
+            <h2>候选球员 <span id="nationalCandidateCount" class="count">0 人</span></h2>
+          </div>
+          <div class="national-filters">
+            <input id="nationalSearch" type="search" placeholder="中文名、英文名或 ID" aria-label="候选球员搜索">
+            <input id="nationalOverall" type="number" min="0" max="99" placeholder="最低能力" aria-label="最低能力">
+            <select id="nationalPosition" aria-label="候选位置"><option value="">全部位置</option></select>
+          </div>
+          <div id="nationalCandidates" class="national-list"><p>请选择国家队</p></div>
+          <p class="national-note">先移出再选入，名单须补满原人数（男足 26 人 / 女足 23 人）；号码 1–99 且不重复。排序仅改变显示，不改首发或阵型。</p>
+        </article>
+      </div>
+    </section>
+    <section id="playersView" class="workspace view active">
+      <aside class="sidebar panel">
+        <div class="panel-title">
+          <div>
+            <span class="eyebrow">PLAYER DATABASE</span>
+            <h2>查找球员</h2>
+          </div>
+          <span id="playerCount" class="count">0</span>
+        </div>
+        <div class="search-stack">
+          <label class="field wide">
+            <span>姓名或球员 ID</span>
+            <input id="playerSearch" type="search" placeholder="例如：Messi、梅西、158023">
+          </label>
+          <div class="filter-grid">
+            <label class="field">
+              <span>国籍</span>
+              <input id="nationFilter" type="search" placeholder="关键字">
+            </label>
+            <label class="field">
+              <span>最低能力</span>
+              <input id="overallFilter" type="number" min="0" max="99" placeholder="如 80">
+            </label>
+          </div>
+          <label class="field wide">
+            <span>位置</span>
+            <select id="positionFilter"><option value="">全部位置</option></select>
+          </label>
+        </div>
+        <div id="playerResults" class="result-list" aria-live="polite"></div>
+      </aside>
+
+      <article id="playerDetail" class="detail panel empty-state">
+        <div class="empty-icon">⚽</div>
+        <h2>选择一名球员</h2>
+        <p>从左侧搜索结果中选择球员后，可以编辑资料、能力和所属球队。</p>
+      </article>
+    </section>
+
+    <section id="teamsView" class="workspace view">
+      <aside class="sidebar panel">
+        <div class="panel-title">
+          <div>
+            <span class="eyebrow">TEAM ROSTERS</span>
+            <h2>查找球队</h2>
+          </div>
+          <span id="teamCount" class="count">0</span>
+        </div>
+        <label class="field wide">
+          <span>中英文名或球队 ID</span>
+          <input id="teamSearch" type="search" placeholder="例如：AC米兰、Milan、47">
+        </label>
+        <div id="teamResults" class="result-list" aria-live="polite"></div>
+      </aside>
+
+      <article id="teamDetail" class="detail panel empty-state">
+        <div class="empty-icon">🏟️</div>
+        <h2>选择一支球队</h2>
+        <p>可以查看球队阵容并批量调整球衣号码。</p>
+      </article>
+    </section>
+
+    <section id="transfersView" class="transfer-page view">
+      <div class="transfer-toolbar panel">
+        <div class="panel-title">
+          <div>
+            <span class="eyebrow">QUICK TRANSFER</span>
+            <h2>快捷转会</h2>
+          </div>
+          <span class="count">仅支持俱乐部与自由球员</span>
+        </div>
+        <div class="transfer-pickers">
+          <div class="field transfer-picker">
+            <span>来源球队</span>
+            <input id="transferFromTeam" type="search" autocomplete="off" spellcheck="false" aria-label="来源球队" aria-controls="transferFromOptions" placeholder="输入球队 ID、中文名或英文名">
+            <div id="transferFromOptions" class="transfer-team-options" role="listbox" hidden></div>
+          </div>
+          <button class="transfer-swap" id="swapTransferTeams" type="button" title="交换来源和目标球队" aria-label="交换来源和目标球队">⇄</button>
+          <div class="field transfer-picker">
+            <span>目标球队</span>
+            <input id="transferToTeam" type="search" autocomplete="off" spellcheck="false" aria-label="目标球队" aria-controls="transferToOptions" placeholder="输入球队 ID、中文名或英文名">
+            <div id="transferToOptions" class="transfer-team-options" role="listbox" hidden></div>
+          </div>
+        </div>
+        <p class="transfer-note">选择两支球队后，可按号码、能力或位置排序。快捷转会中的号码仅供查看，转入俱乐部时如号码不可用会自动分配。普通俱乐部需保持 16–42 人；自由球员使用独立球员池且不限制人数。原有国家队关系保持不变。</p>
+      </div>
+
+      <div class="transfer-columns">
+        <article class="transfer-roster panel">
+          <div class="transfer-roster-header">
+            <div>
+              <span class="eyebrow">FROM</span>
+              <h2 id="transferFromTitle">来源球队</h2>
+            </div>
+            <span id="transferFromCount" class="count">0 人</span>
+          </div>
+          <div id="transferFromRoster" class="transfer-list"><div class="transfer-empty">请选择来源球队</div></div>
+        </article>
+
+        <div class="transfer-middle panel">
+          <div class="transfer-arrow">⇄</div>
+          <strong>选择球员</strong>
+          <span>在任一侧排序或转入另一侧</span>
+        </div>
+
+        <article class="transfer-roster panel">
+          <div class="transfer-roster-header">
+            <div>
+              <span class="eyebrow">TO</span>
+              <h2 id="transferToTitle">目标球队</h2>
+            </div>
+            <span id="transferToCount" class="count">0 人</span>
+          </div>
+          <div id="transferToRoster" class="transfer-list"><div class="transfer-empty">请选择目标球队</div></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="exactTransfersView" class="exact-transfer-page view">
+      <aside class="exact-transfer-filters panel">
+        <div class="panel-title">
+          <div>
+            <span class="eyebrow">PRECISE TRANSFER</span>
+            <h2>精确转会</h2>
+          </div>
+        </div>
+        <div class="field field-with-options">
+          <span>目标球队</span>
+          <input id="exactTransferTarget" type="search" data-team-option-kind="club" data-team-id="" data-team-original-id="" data-original="" placeholder="输入球队 ID、中文名或英文名" autocomplete="off" spellcheck="false">
+          <div class="field-options" role="listbox" hidden></div>
+        </div>
+        <div class="exact-filter-divider"></div>
+        <div class="field">
+          <span>球员姓名或 ID</span>
+          <input id="exactPlayerSearch" type="search" placeholder="例如：Messi、梅西、158023">
+        </div>
+        <div class="field">
+          <span>国籍</span>
+          <input id="exactNationFilter" type="search" placeholder="中文、英文或国籍 ID">
+        </div>
+        <div class="field">
+          <span>能力下限</span>
+          <input id="exactOverallFilter" type="number" min="0" max="99" placeholder="例如：80">
+        </div>
+        <p class="exact-transfer-note">从全体球员中筛选，最多显示 300 条结果。选择目标球队后即可转入；原俱乐部人数限制、目标球队人数限制和号码自动分配规则与快捷转会一致。</p>
+      </aside>
+
+      <article class="exact-transfer-results panel">
+        <div class="exact-transfer-header">
+          <div>
+            <span class="eyebrow">ALL PLAYERS</span>
+            <h2 id="exactTransferTitle">全体球员</h2>
+          </div>
+          <span id="exactTransferCount" class="count">0 条结果</span>
+        </div>
+        <div id="exactTransferResults" class="exact-player-list"><div class="transfer-empty">请选择目标球队并设置筛选条件</div></div>
+      </article>
+    </section>
+  </main>
+
+  <dialog id="openDialog">
+    <form method="dialog" class="dialog-card" id="openForm">
+      <div>
+        <span class="eyebrow">OPEN SQUADS FILE</span>
+        <h2>打开本地存档</h2>
+        <p id="openDialogHint">正常情况下点击顶部“打开存档”会直接弹出系统文件选择窗口。这里是备用方式：系统窗口不可用时，可以在文件管理器中选文件，或手动输入路径。</p>
+      </div>
+      <label class="field wide">
+        <span>在文件管理器中选择（按文件名在 FC 存档目录里查找）</span>
+        <input id="openFileInput" type="file">
+      </label>
+      <label class="field wide">
+        <span>或手动输入存档完整路径</span>
+        <input id="openPathInput" type="text" autocomplete="off">
+      </label>
+      <div class="dialog-actions">
+        <button class="button ghost" id="cancelOpen" type="button">取消</button>
+        <button class="button secondary" id="retryPickSave" type="button">重试系统文件选择</button>
+        <button class="button primary" id="confirmOpen" value="default">打开</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

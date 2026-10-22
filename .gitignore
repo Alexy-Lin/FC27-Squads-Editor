@@ -1,0 +1,28 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local config / editor state
+.fc26-editor.json
+.fc26-save-*.tmp
+
+# Game saves and exports (never publish the user's saves)
+testdata/Squads*
+Squads*
+*.sav
+*.xlsx
+
+# Local scratch folders
+downloads/
+backup/
+ego/
+3dm_*.html
+ali213_*.html
+ego-browser-skill.txt
+
+# Generated / cached assets
+data/heads/
+data/birthdate_snapshots/
+data/*.db-shm
+data/*.db-wal
+*.tmp

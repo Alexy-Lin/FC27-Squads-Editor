@@ -1,0 +1,680 @@
+"""Player name resolver — builds lookup tables from available name sources."""
+import csv
+import sqlite3
+from pathlib import Path
+from typing import Dict, Optional, Tuple
+
+from .table import Table
+from .db_file import DbFile
+
+# The project keeps the FST-compatible lookup files beside the runtime data.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+FST_CONFIG_DIR = PROJECT_ROOT / "config"
+
+
+class NameResolver:
+    """Resolves player names and nationality from available data sources.
+
+    Player name sources (in priority order):
+      1. player_names.csv:       static CSV file with player ID → display name overrides
+      2. editedplayernames:      playerid → firstname/surname (from save file)
+      3. playernames.txt (FST):  nameid → name string (41190 entries, full EA database)
+      4. dcplayernames (save):   nameid → name string (fallback if FST file unavailable)
+      5. commonnameid fallback:  look up in dcplayernames
+      6. Fallback: "Player #{pid}"
+
+    Nationality source:
+      - data/nations.csv:        English names (218 nations)
+      - config/nationalities.txt:  Chinese names (optional fallback)
+
+    Team name sources:
+      - data/teams_cn.csv:       Chinese team names (287 teams)
+      - lyxL (teams table):      English team names from the save file
+    """
+
+    def __init__(self, db: DbFile):
+        self._db = db
+        self._edited: Dict[int, tuple[str, str, str]] = {}  # pid -> (first, last, jersey)
+        self._dc_names: Dict[int, str] = {}  # nameid -> best name string
+        self._csv_names: Dict[int, str] = {}  # pid -> display_name (from CSV)
+        self._csv_common_names: Dict[int, str] = {}  # pid -> common_name (from common_names.csv)
+        self._player_id_overrides: Dict[int, int] = {}  # save playerid -> official playerid
+        self._legend_names: Dict[int, str] = {}  # official playerid -> name
+        self._legend_records: Dict[int, dict] = {}  # official playerid -> reference row
+        self._icon_names: Dict[int, str] = {}  # official playerid -> icon/hero name
+        self._nations: Dict[int, str] = {}  # nationid -> nationname (from nations.csv)
+        self._team_names_cn: Dict[int, str] = {}  # internal teamid -> Chinese name
+        self._team_names_en: Dict[int, str] = {}  # teamid -> English name (from save)
+        self._team_official_ids: Dict[int, int] = {}  # internal teamid -> official assetid
+        self._team_internal_ids: Dict[int, int] = {}  # official assetid -> internal teamid
+        self._player_team: Dict[int, list] = {}  # playerid -> [teamid, ...] (from RrqT)
+        self._player_jersey: Dict[int, int] = {}  # playerid -> jersey number
+        players_tbl = db.get_table("CZUM")
+        self._players_by_id = {
+            record.get("playerid"): record
+            for record in (players_tbl.records if players_tbl else [])
+            if record.get("playerid")
+        }
+
+        # Build team name lookup from teams_cn.csv
+        teams_path = Path(__file__).resolve().parent.parent / "data" / "teams_cn.csv"
+        if teams_path.exists():
+            try:
+                with teams_path.open("r", encoding="utf-8") as f:
+                    for row in csv.DictReader(f):
+                        tid = (row.get("teamid") or "").strip()
+                        cn = (row.get("teamname_cn") or "").strip()
+                        if tid.isdigit() and cn:
+                            self._team_names_cn[int(tid)] = cn
+            except Exception:
+                pass
+
+        # Build team name lookup from save file's lyxL (teams) table
+        teams_tbl = db.get_table("lyxL")
+        if teams_tbl:
+            for r in teams_tbl.records:
+                tid = r.get("teamid", 0)
+                assetid = r.get("assetid", 0)
+                name = r.get("teamname", "")
+                if tid and assetid:
+                    self._team_official_ids[tid] = assetid
+                    self._team_internal_ids[assetid] = tid
+                if tid and name:
+                    self._team_names_en[tid] = name
+
+        # teams_cn.csv is keyed by official/assetid. Convert the names to
+        # the internal IDs used by RrqT after the save's ID map is known.
+        if self._team_internal_ids:
+            official_names = self._team_names_cn
+            self._team_names_cn = {
+                self._team_internal_ids[official_id]: name
+                for official_id, name in official_names.items()
+                if official_id in self._team_internal_ids
+            }
+
+        # Build player→team mapping from RrqT (teamplayerlinks)
+        # Players can have multiple entries (club + national team)
+        rqt = db.get_table("RrqT")
+        if rqt:
+            for r in rqt.records:
+                pid = r.get("playerid", 0)
+                tid = r.get("teamid", 0)
+                num = r.get("jerseynumber", 0)
+                if pid and tid:
+                    if pid not in self._player_team:
+                        self._player_team[pid] = []
+                    self._player_team[pid].append(tid)
+                    if num and pid not in self._player_jersey:
+                        self._player_jersey[pid] = num
+
+        # Build editedplayernames lookup
+        et = db.get_table("nQVU")
+        if et:
+            for r in et.records:
+                pid = r.get("playerid", 0)
+                first = r.get("firstname", "") or ""
+                last = r.get("surname", "") or ""
+                jersey = r.get("playerjerseyname", "") or ""
+                if pid > 0 and (first or last):
+                    self._edited[pid] = (first, last, jersey)
+
+        # Build dcplayernames lookup: FST playernames.txt first, supplement from save bneD
+        pn_path = FST_CONFIG_DIR / "playernames.txt"
+        if pn_path.exists():
+            self._load_playernames(pn_path)
+        dt = db.get_table("bneD")
+        if dt:
+            for r in dt.records:
+                nid = r.get("nameid", 0)
+                name_str = r.get("name", "") or ""
+                if nid > 0 and name_str and nid not in self._dc_names:
+                    self._dc_names[nid] = name_str
+
+        # Build nation lookup: supplement English names with Chinese from FST
+        nat_fst_path = FST_CONFIG_DIR / "nationalities.txt"
+        if nat_fst_path.exists():
+            self._load_nationalities_fst(nat_fst_path)
+
+        # Build CSV name lookup from the static player_names.csv file
+        csv_path = Path(__file__).resolve().parent.parent / "data" / "player_names.csv"
+        if csv_path.exists():
+            try:
+                with csv_path.open("r", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    for row in reader:
+                        pid_str = (row.get("playerid") or "").strip()
+                        display_name = (row.get("display_name") or "").strip()
+                        common_name = (row.get("common_name") or "").strip()
+                        if pid_str.isdigit() and display_name:
+                            # Keep the first row: curated/FC27-verified rows
+                            # intentionally precede the legacy dataset rows.
+                            self._csv_names.setdefault(int(pid_str), display_name)
+                        # Also store common_name column as a common name source
+                        if pid_str.isdigit() and common_name and common_name != display_name:
+                            self._csv_common_names.setdefault(int(pid_str), common_name)
+            except Exception:
+                pass
+
+        # Build common name lookup from common_names.csv (Icon short names)
+        common_csv = Path(__file__).resolve().parent.parent / "data" / "common_names.csv"
+        if common_csv.exists():
+            try:
+                with common_csv.open("r", encoding="utf-8") as f:
+                    for row in csv.DictReader(f):
+                        pid_str = (row.get("playerid") or "").strip()
+                        name = (row.get("common_name") or "").strip()
+                        if pid_str.isdigit() and name:
+                            self._csv_common_names[int(pid_str)] = name
+            except Exception:
+                pass
+
+        # Optional per-save corrections produced by the FC27 mapping audit.
+        # The file is deliberately separate from player_names.csv because
+        # player_names.csv contains public IDs while this file contains the
+        # save-internal -> public ID relationship.
+        map_path = Path(__file__).resolve().parent.parent / "data" / "player_id_map.csv"
+        if map_path.exists():
+            try:
+                with map_path.open("r", encoding="utf-8-sig") as f:
+                    for row in csv.DictReader(f):
+                        save_id = (row.get("save_playerid") or "").strip()
+                        official_id = (row.get("official_playerid") or "").strip()
+                        if save_id.isdigit() and official_id.isdigit():
+                            self._player_id_overrides[int(save_id)] = int(official_id)
+            except Exception:
+                pass
+
+        # The bundled legend database is also a useful FC27 ID reference.
+        # The save's 85+ legend block has the same attributes as these rows,
+        # but its player IDs are shifted by one.  Keep this local and optional
+        # so the editor remains usable without any network access.
+        legend_path = Path(__file__).resolve().parent.parent / "data" / "legend_database.db"
+        if legend_path.exists():
+            try:
+                with sqlite3.connect(legend_path) as connection:
+                    columns = [item[1] for item in connection.execute("PRAGMA table_info(czum)")]
+                    for values in connection.execute("SELECT * FROM czum"):
+                        row = dict(zip(columns, values))
+                        player_id = int(row.get("playerid", 0) or 0)
+                        if player_id:
+                            self._legend_records[player_id] = row
+                    for player_id, name in connection.execute("SELECT playerid, name FROM player_names"):
+                        if player_id and name:
+                            self._legend_names[int(player_id)] = name
+            except (OSError, sqlite3.Error):
+                pass
+
+        # icon_hero_list.csv uses the same public player IDs and covers the
+        # classic/legend cards that are not present in player_names.csv.
+        icon_path = Path(__file__).resolve().parent.parent / "data" / "icon_hero_list.csv"
+        if icon_path.exists():
+            try:
+                with icon_path.open("r", encoding="utf-8-sig", newline="") as f:
+                    reader = csv.reader(f)
+                    next(reader, None)  # descriptive header
+                    next(reader, None)  # data header
+                    for row in reader:
+                        if len(row) >= 2 and row[0].strip().isdigit() and row[1].strip():
+                            self._icon_names[int(row[0].strip())] = row[1].strip()
+            except (OSError, csv.Error):
+                pass
+
+        # Build nation name lookup from nations.csv (extracted from template DB)
+        nations_path = Path(__file__).resolve().parent.parent / "data" / "nations.csv"
+        if nations_path.exists():
+            try:
+                with nations_path.open("r", encoding="utf-8") as f:
+                    for row in csv.DictReader(f):
+                        nid_str = (row.get("nationid") or "").strip()
+                        name = (row.get("nationname") or "").strip()
+                        if nid_str.isdigit() and name:
+                            self._nations[int(nid_str)] = name
+            except Exception:
+                pass
+
+        # Alternate English nation names: nations.csv stores "Holland" for 34,
+        # while FC27 team names use "Netherlands".  Both must match when the
+        # editor decides whether a team is a national team.
+        self._nation_alt_names: set = set()
+        alt_path = Path(__file__).resolve().parent.parent / "data" / "nationality_names.csv"
+        if alt_path.exists():
+            try:
+                with alt_path.open("r", encoding="utf-8-sig") as f:
+                    for row in csv.DictReader(f):
+                        name = (row.get("display_name") or "").strip()
+                        if name:
+                            self._nation_alt_names.add(self._strip_gender_suffix(name))
+            except Exception:
+                pass
+
+    def get_nation_name(self, nationid: int) -> str:
+        """Get English name for a nationality code."""
+        return self._nations.get(nationid, str(nationid))
+
+    def get_nation_name_cn(self, nationid: int) -> str:
+        """Return the configured Chinese nation name when available."""
+        path = FST_CONFIG_DIR / "nationalities.txt"
+        if not hasattr(self, "_nations_cn"):
+            self._nations_cn = {}
+            try:
+                with path.open("r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        key, value = line.split("=", 1)
+                        if key.strip().isdigit() and value.strip():
+                            self._nations_cn[int(key.strip())] = value.strip()
+            except OSError:
+                pass
+        return self._nations_cn.get(nationid, self.get_nation_name(nationid))
+
+    def get_nation_code(self, nation_name: str) -> Optional[int]:
+        """Reverse lookup: nation name → code."""
+        for code, name in self._nations.items():
+            if name.lower() == nation_name.lower():
+                return code
+        return None
+
+    def get_nations(self) -> Dict[int, str]:
+        """Get the full nation mapping (code → name)."""
+        return dict(self._nations)
+
+    def get_name(self, record: dict) -> str:
+        """Build the best possible display name for a player record."""
+        pid = record.get("playerid", 0)
+
+        # 1. CSV name lookup (user-curated, overrides in-game edited names).
+        # FC27's 80+ player block is currently shifted by one ID. Prefer an
+        # explicit correction, then the validated pid-1 candidate for that
+        # block, and finally the literal save ID.
+        official_pid = self.get_official_player_id(record)
+        if official_pid in self._csv_names:
+            return self._csv_names[official_pid]
+        if official_pid in self._legend_names:
+            return self._legend_names[official_pid]
+        if official_pid in self._icon_names:
+            return self._icon_names[official_pid]
+
+        # 2. Edited name (from save file's editedplayernames)
+        if pid in self._edited:
+            first, last, jersey = self._edited[pid]
+            display = f"{first} {last}".strip()
+            if not display:
+                display = jersey
+            return display
+
+        # 3. Try commonnameid -> dcplayernames
+        cnid = record.get("commonnameid", 0)
+        if cnid > 0 and cnid in self._dc_names:
+            return self._dc_names.get(cnid, "")
+
+        # 4. Try firstnameid + lastnameid -> dcplayernames
+        fnid = record.get("firstnameid", 0) or 0
+        lnid = record.get("lastnameid", 0) or 0
+        first = self._dc_names.get(fnid, "") if fnid > 0 else ""
+        last = self._dc_names.get(lnid, "") if lnid > 0 else ""
+        if first and last:
+            return f"{first} {last}"
+        if last:
+            return last
+        if first:
+            return first
+
+        # 5. Fallback
+        return f"Player #{pid}"
+
+    def get_common_name(self, record: dict) -> str:
+        """Get the common/short name for a player (e.g. 'Ronaldo' for R9, 'Kaká')."""
+        pid = record.get("playerid", 0)
+        official_pid = self.get_official_player_id(record)
+        # 1. Common names CSV (Icons)
+        if official_pid in self._csv_common_names:
+            return self._csv_common_names[official_pid]
+        # 2. Look up commonnameid in dcplayernames
+        cnid = record.get("commonnameid", 0)
+        if cnid > 0 and cnid in self._dc_names:
+            return self._dc_names[cnid]
+        # 3. CSV display name (might differ from common name, but useful fallback)
+        if official_pid in self._csv_names:
+            return self._csv_names[official_pid]
+        if official_pid in self._legend_names:
+            return self._legend_names[official_pid]
+        if official_pid in self._icon_names:
+            return self._icon_names[official_pid]
+        return ""
+
+    def get_official_player_id(self, record_or_playerid) -> int:
+        """Resolve a save player ID to the public/EA player ID.
+
+        The first FC27 correction pass is intentionally conservative: only
+        players rated 80 or higher use the observed pid-1 rule, and only when
+        the public ID already has a verified name in player_names.csv. Any
+        ambiguous/new player remains on its literal save ID until the audit
+        file provides an explicit correction.
+        """
+        if isinstance(record_or_playerid, dict):
+            record = record_or_playerid
+            pid = int(record.get("playerid", 0) or 0)
+        else:
+            pid = int(record_or_playerid or 0)
+            record = self._players_by_id.get(pid, {})
+        if pid in self._player_id_overrides:
+            return self._player_id_overrides[pid]
+        if (record.get("overallrating", 0) or 0) >= 85:
+            legend_id = pid - 1
+            if self._matches_legend_reference(record, legend_id):
+                return legend_id
+            shifted = pid - 1
+            if (
+                shifted in self._csv_names
+                or shifted in self._csv_common_names
+                or shifted in self._icon_names
+            ):
+                return shifted
+        return pid
+
+    def _matches_legend_reference(self, record: dict, official_id: int) -> bool:
+        """Validate the FC27 pid-1 legend candidate against local data."""
+        reference = self._legend_records.get(official_id)
+        if not reference:
+            return False
+        # Nationality and height form the identity gate.  The remaining
+        # fields tolerate FC27 rating refreshes while still requiring a
+        # strong attribute fingerprint.
+        if record.get("nationality") != reference.get("nationality"):
+            return False
+        if record.get("height") != reference.get("height"):
+            return False
+        fingerprint = (
+            "overallrating", "weight", "preferredposition1", "preferredfoot",
+            "skillmoves", "weakfootabilitytypecode", "finishing", "dribbling",
+            "sprintspeed", "acceleration",
+        )
+        matches = sum(record.get(field) == reference.get(field) for field in fingerprint)
+        return matches >= 7
+
+    def get_name_by_player_id(self, playerid: int) -> str:
+        """Get display name for a player by ID."""
+        record = self._players_by_id.get(playerid)
+        if record:
+            return self.get_name(record)
+        return f"Player #{playerid}"
+
+    def get_name_cn(self, record: dict) -> str:
+        """Return a localized display name, falling back to the resolved name."""
+        return self.get_name(record)
+
+    def get_name_cn_by_player_id(self, playerid: int) -> str:
+        return self.get_name_by_player_id(playerid)
+
+    # National team IDs (from 国家队ID.txt)
+    _NATIONAL_TEAM_IDS = {
+        1318, 1322, 1325, 1327, 1330, 1331, 1334, 1335, 1337, 1338,
+        1341, 1343, 1352, 1353, 1354, 1355, 1356, 1357, 1359, 1361,
+        1362, 1363, 1364, 1365, 1367, 1369, 1370, 1375, 1377, 1386,
+        1387, 1395, 1415, 1886, 105035,
+        110081, 111099, 111108, 111109, 111112, 111130, 111451,
+        111455, 111459, 111465, 111466, 111473, 111487,
+    }
+
+    def get_player_team(self, playerid: int) -> tuple[Optional[str], Optional[str]]:
+        """Get (club_name, national_team_name) for a player, or (None, None)."""
+        teamids = self._player_team.get(playerid, [])
+        if not teamids:
+            return None, None
+        club = None
+        nat = None
+        for tid in teamids:
+            name = self._team_names_cn.get(tid, self._team_names_en.get(tid, None))
+            if self.is_national_team(tid):
+                nat = name or str(tid)
+            else:
+                club = name or str(tid)
+        return club, nat
+
+    def get_player_team_ids(self, playerid: int) -> tuple[Optional[int], Optional[int]]:
+        """Return (club_id, national_team_id) for a player."""
+        teamids = self._player_team.get(playerid, [])
+        club = next((tid for tid in teamids if not self.is_national_team(tid)), None)
+        national = next((tid for tid in teamids if self.is_national_team(tid)), None)
+        return club, national
+
+    def get_team_names(self, teamid: int) -> tuple[str, str]:
+        return self._team_names_en.get(teamid, ""), self._team_names_cn.get(teamid, "")
+
+    def get_team_official_id(self, teamid: int) -> Optional[int]:
+        """Return the public/EA assetid for an internal save team ID."""
+        return self._team_official_ids.get(teamid)
+
+    def get_team_internal_id(self, official_id: int) -> Optional[int]:
+        """Return the save-internal teamid for a public/EA assetid."""
+        return self._team_internal_ids.get(official_id)
+
+    def is_national_team(self, teamid: int) -> bool:
+        if not teamid:
+            return False
+        if teamid in self.detected_national_teams():
+            return True
+        if teamid in self._NATIONAL_TEAM_IDS:
+            # The legacy list was built from FC26 saves.  FC27 reshuffled the
+            # asset IDs, so an ID from that list may now belong to a club
+            # (e.g. 1886 Panathinaikos / 111099 Motor Lublin).  Only trust it
+            # when the team also looks like a national team by name.
+            return self._is_nation_name(self._team_names_en.get(teamid, ""))
+        return False
+
+    #: Teams that hold placeholder records instead of real players: the 5v5/Rush
+    #: squads (``Rush Goalkeeper``) and the free-agent manager pool (a second
+    #: Zidane record, which must never be selectable as a player).
+    NON_PLAYER_TEAM_MARKERS = (
+        "5 对 5", "5对5", "5v5", "5 vs 5", "rush", "small sided",
+        "经理", "manager",
+    )
+
+    def is_non_player_team(self, teamid: int) -> bool:
+        """True for placeholder/manager pools (5v5/Rush teams, manager pool)."""
+        if not teamid:
+            return False
+        names = (
+            self._team_names_en.get(teamid),
+            self._team_names_cn.get(teamid),
+            self.get_team_name(teamid),
+        )
+        return any(
+            marker in str(name or "").casefold()
+            for name in names
+            for marker in self.NON_PLAYER_TEAM_MARKERS
+        )
+
+    # ------------------------------------------------------------------
+    # Save-driven national-team detection
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _normalise_name(value) -> str:
+        return "".join(str(value or "").split()).casefold()
+
+    @classmethod
+    def _strip_gender_suffix(cls, text) -> str:
+        """Drop the English/Chinese women's-team suffix before name matching."""
+        name = cls._normalise_name(text)
+        for suffix in ("women", "womens", "女足", "(nationalteam)", "nationalteam"):
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
+        return name
+
+    def _is_nation_name(self, text) -> bool:
+        return bool(text) and self._strip_gender_suffix(text) in self._nation_name_keys()
+
+    def _nation_name_keys(self) -> set:
+        keys = set()
+        for name in self._nations.values():
+            if name:
+                keys.add(self._strip_gender_suffix(name))
+        keys |= self._nation_alt_names
+        try:
+            from .mappings import NATIONS_CN
+        except ImportError:  # pragma: no cover
+            from core.mappings import NATIONS_CN
+        for name in NATIONS_CN.values():
+            if name:
+                keys.add(self._strip_gender_suffix(name))
+        keys.discard("")
+        return keys
+
+    def detected_national_teams(self) -> set:
+        """National teams the save itself identifies, on top of the fixed list.
+
+        The save tells us which teams are national teams:
+
+        * the team has a ``CxJp`` (team → nation) link, and
+        * its name equals a known nation name (English or Chinese, with the
+          FC27 ``... Women`` suffix stripped), and
+        * its roster is dominated by players of that same nation id.
+
+        Club teams named after a country (vanishingly rare) fail the third test,
+        so real clubs stay clubs.  The result is cached on the DB object so the
+        several resolvers built for one save share one computation.
+        """
+        cached = getattr(self._db, "_detected_national_teams", None)
+        if cached is not None:
+            return cached
+        detected = self._detect_national_teams()
+        try:
+            self._db._detected_national_teams = detected
+        except Exception:  # pragma: no cover - read-only DB objects
+            pass
+        return detected
+
+    def _detect_national_teams(self) -> set:
+        teams = self._db.get_table("lyxL")
+        if not teams:
+            return set()
+        nation_by_team = {}
+        links_table = self._db.get_table("CxJp")
+        if links_table:
+            for record in links_table.records:
+                team_id = record.get("teamid")
+                nation_id = record.get("nationid")
+                if team_id and nation_id:
+                    nation_by_team[team_id] = nation_id
+        if not nation_by_team:
+            return set()
+        rosters = {}
+        rqt = self._db.get_table("RrqT")
+        if rqt:
+            for record in rqt.records:
+                team_id = record.get("teamid")
+                player_id = record.get("playerid")
+                if team_id and player_id:
+                    rosters.setdefault(team_id, []).append(player_id)
+        detected = set()
+        for record in teams.records:
+            team_id = record.get("teamid")
+            if not team_id:
+                continue
+            nation_id = nation_by_team.get(team_id)
+            if not nation_id:
+                continue
+            if not self._is_nation_name(record.get("teamname")):
+                continue
+            roster = rosters.get(team_id) or []
+            if not roster:
+                continue
+            counts = {}
+            for player_id in roster:
+                player = self._players_by_id.get(player_id) or {}
+                nationality = player.get("nationality")
+                counts[nationality] = counts.get(nationality, 0) + 1
+            top_nation, top_count = max(counts.items(), key=lambda item: item[1])
+            if top_nation == nation_id and top_count >= max(2, len(roster) * 0.6):
+                detected.add(team_id)
+        return detected
+
+    def refresh_player_teams(self, table=None):
+        """Rebuild team indexes after an in-memory RrqT edit."""
+        self._player_team.clear()
+        self._player_jersey.clear()
+        # rosters changed → the national-team detection cache is stale
+        try:
+            self._db._detected_national_teams = None
+        except Exception:  # pragma: no cover
+            pass
+        table = table or self._db.get_table("RrqT")
+        if table:
+            for r in table.records:
+                pid = r.get("playerid", 0)
+                tid = r.get("teamid", 0)
+                num = r.get("jerseynumber", 0)
+                if pid and tid:
+                    self._player_team.setdefault(pid, []).append(tid)
+                    if num and pid not in self._player_jersey:
+                        self._player_jersey[pid] = num
+
+    def get_team_name(self, teamid: int) -> str:
+        """Get team name (Chinese preferred, English fallback, ID as last resort)."""
+        return self._team_names_cn.get(teamid, self._team_names_en.get(teamid, str(teamid)))
+
+    # ------------------------------------------------------------------
+    # FST reference file loaders
+    # ------------------------------------------------------------------
+
+    def _load_playernames(self, path: Path):
+        """Load player name database from FST's playernames.txt (UTF-16 with BOM).
+
+        Format: tab-separated TSV with header: name, nameid, commentaryid
+        Contains all ~41190 EA game name strings, keyed by nameid.
+        """
+        try:
+            # Use 'utf-16' (not 'utf-16-le') to auto-strip the BOM
+            with path.open("r", encoding="utf-16", newline="") as f:
+                reader = csv.DictReader(f, delimiter="\t")
+                for row in reader:
+                    nid_str = (row.get("nameid") or "").strip()
+                    name_str = (row.get("name") or "").strip()
+                    if nid_str.isdigit() and name_str:
+                        nid = int(nid_str)
+                        if nid > 0 and nid not in self._dc_names:
+                            self._dc_names[nid] = name_str
+        except Exception:
+            pass
+
+    def _load_nationalities_fst(self, path: Path):
+        """Load Chinese nation names from FST's nationalities.txt.
+
+        Format: ID=ChineseName per line (UTF-8).
+        Supplements the English nations.csv with Chinese names.
+        """
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        nid_str, name = line.split("=", 1)
+                        if nid_str.strip().isdigit() and name.strip():
+                            nid = int(nid_str.strip())
+                            # Only set if not already in _nations (prefer existing)
+                            if nid not in self._nations:
+                                self._nations[nid] = name.strip()
+        except Exception:
+            pass
+
+    def search(self, query: str, players_table: Table) -> list[int]:
+        """Search players by name or playerid.
+
+        Returns matching playerids.
+        """
+        results = set()
+        q = query.lower().strip()
+
+        for r in players_table.records:
+            pid = r.get("playerid", 0)
+            if q.isdigit() and pid == int(q):
+                return [pid]
+            name = self.get_name(r)
+            if q in name.lower():
+                results.add(pid)
+
+        return sorted(results)
