@@ -457,7 +457,7 @@ class NameResolver:
         if teamid in self.detected_national_teams():
             return True
         if teamid in self._NATIONAL_TEAM_IDS:
-            # The legacy list was built from FC26 saves.  FC27 reshuffled the
+            # The legacy list was built from older game saves.  FC27 reshuffled the
             # asset IDs, so an ID from that list may now belong to a club
             # (e.g. 1886 Panathinaikos / 111099 Motor Lublin).  Only trust it
             # when the team also looks like a national team by name.

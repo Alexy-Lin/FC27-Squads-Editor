@@ -9,7 +9,7 @@ from web_app import EditorState, create_app
 SAMPLE = find_latest_save()
 
 
-@unittest.skipUnless(SAMPLE and SAMPLE.is_file(), "本机没有 FC26/FC27 样本存档")
+@unittest.skipUnless(SAMPLE and SAMPLE.is_file(), "本机没有 FC27 样本存档")
 class OpenSaveDialogTests(unittest.TestCase):
     """「打开存档」按钮走系统文件选择窗口（后端弹窗），不再要求手填路径。"""
 

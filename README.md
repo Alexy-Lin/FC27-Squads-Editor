@@ -1,8 +1,8 @@
-# FC26 / FC27 存档编辑器 / FC26 & FC27 Squads Editor
+# FC27 存档编辑器 / FC27 Squads Editor
 
-EA SPORTS FC 26/27 `Squads` save editor with a Chinese Web interface, command-line tools, and Excel export.
+EA SPORTS FC 27 `Squads` save editor with a Chinese Web interface, command-line tools, and Excel export.
 
-EA SPORTS FC 26/27 `Squads` 存档编辑器，提供中文 Web 界面、命令行工具和 Excel 导出功能。
+EA SPORTS FC 27 `Squads` 存档编辑器，提供中文 Web 界面、命令行工具和 Excel 导出功能。
 
 ## 功能 / Features
 
@@ -27,7 +27,7 @@ EA SPORTS FC 26/27 `Squads` 存档编辑器，提供中文 Web 界面、命令�
 
 - Windows 10/11
 - Python 3.10 或更高版本 / Python 3.10 or newer
-- FC26 或 FC27 本地 `Squads` 存档 / A local FC26 or FC27 `Squads` save
+- FC27 本地 `Squads` 存档 / A local FC27 `Squads` save
 
 ### 自动安装 / Automatic setup
 
@@ -59,9 +59,9 @@ python web_app.py
 http://127.0.0.1:8765/
 ```
 
-启动时会自动加载 FC26 存档目录中修改时间最新的 `Squads*` 文件。也可以点击“打开存档”并输入存档完整路径。
+启动时会自动加载 FC27 存档目录（`settings`）中修改时间最新的 `Squads*` 文件。也可以点击“打开存档”，直接用系统文件选择窗口打开任意存档。
 
-At startup, the editor automatically loads the newest `Squads*` file in the FC26 save folder. You can also click “打开存档” and enter a full save path.
+At startup, the editor automatically loads the newest `Squads*` file from the FC27 settings folder. You can also click “打开存档” and pick any save in the native file dialog.
 
 基本操作 / Basic workflow:
 
@@ -72,23 +72,29 @@ At startup, the editor automatically loads the newest `Squads*` file in the FC26
 
 球队页面可以查看阵容并批量填写球衣号码。转会页面可以选择来源球队和目标球队，再点击球员对应的转会按钮。
 
-“国家队选拔”页面可以选择国家队，按姓名、能力和位置筛选同国籍球员，移入或移出候选人并编辑号码。名单必须满足 FC26 的 26 人规则，点击“应用选拔与号码”后，再点击顶部“保存为新存档”。
+“国家队选拔”页面支持男足/女足切换：按国籍和名单性别筛选候选人（自动排除 5v5/经理池占位记录），按原名单人数补满（男足 26 人 / 女足 23 人），可用“按位置自动编号（经典号码）”一键分号，点击“应用选拔与号码”后再点击顶部“保存为新存档”。
 
-“快捷功能”页面提供两个一键操作：
+“快捷功能”页面提供四个批量操作：
 
-1. “设置全部球员为 18 岁”：把当前存档所有球员的年龄统一设置为 18 岁。
-2. “一键添加缺失传奇”：读取项目内置传奇清单，把当前存档中没有的传奇球员以自由球员身份加入。
+1. “全员年龄调整”：按目标年龄统一调整生日（保留真实月日，执行前自动记录生日快照，可恢复原始/内置真实生日）。
+2. “现役老将回归巅峰”：按 FIFA19 峰值恢复 30 岁以上现役老将，只升不降。
+3. “补齐缺失球员”：与官方存档对比，把真正缺失的球员以自由球员身份补回。
+4. “添加缺失传奇”：把传奇球员以自由球员身份补入（默认男足，女足传奇可选）。
 
-两个操作都会先暂存修改，不会覆盖原存档；完成后请点击顶部“保存为新存档”。再次点击“放弃修改”即可撤销尚未保存的操作。
+所有操作都会先暂存修改，不会覆盖原存档；确认后点击顶部“保存为新存档”。再次点击“放弃修改”即可撤销尚未保存的操作。
 
 The Teams page supports squad viewing and batch shirt-number editing. The Transfers page lets you select a source and target club, then transfer players individually.
 
-The National Team page lets you choose a country, filter eligible players by name, rating, or position, add or remove players, and edit shirt numbers. The roster must contain 26 players for FC26. Apply the selection first, then click “Save as new save”.
+The National Team page supports a men/women switch: candidates are filtered by nationality and roster gender (5v5/manager placeholder records are excluded), the squad is filled to the original roster size (26 for men, 23 for women), and “按位置自动编号（经典号码）” assigns classic shirt numbers. Apply the selection first, then click “Save as new save”.
 
-The “Quick Features” page provides two one-click actions:
+The “Quick Features” page provides four batch actions:
 
-1. “Set all players to age 18” updates the age of every player in the loaded save.
-2. “Add missing legends” adds legends from the bundled list that are not already in the save, as free agents.
+1. “全员年龄调整” — set every player's age while keeping their real month/day, with a reversible birthday snapshot.
+2. “现役老将回归巅峰” — restore active veterans (30+) to their FIFA19 peak values, raise-only.
+3. “补齐缺失球员” — import genuinely missing players from an official save as free agents.
+4. “添加缺失传奇” — add missing legends as free agents (men only by default; women's legends optional).
+
+Everything is staged in memory first and the original save is never overwritten; click “保存为新存档” when ready, or “放弃修改” to discard the staged changes.
 
 Both actions are staged in memory first. Click “Save as new save” when ready; click “Discard changes” to undo anything that has not been saved.
 
@@ -152,9 +158,9 @@ crossing, shortpassing, longpassing, volleys, composure,
 preferredposition1, preferredfoot, weakfootabilitytypecode, skillmoves
 ```
 
-字段也可以使用 FC26 的短名，例如 `BAPc=4`、`aOBn=5`。数值超出范围时会自动限制到有效范围；相对修改可以写成 `overallrating=+5`。
+字段也可以使用游戏内短名，例如 `BAPc=4`、`aOBn=5`。数值超出范围时会自动限制到有效范围；相对修改可以写成 `overallrating=+5`。
 
-Fields may also use FC26 short names, such as `BAPc=4` or `aOBn=5`. Values outside the valid range are clamped automatically; use `overallrating=+5` for a relative change.
+Fields may also use the in-game short names, such as `BAPc=4` or `aOBn=5`. Values outside the valid range are clamped automatically; use `overallrating=+5` for a relative change.
 
 查看全部参数 / Show all options:
 
@@ -182,12 +188,11 @@ python main.py --help
 
 ### 找不到存档 / Save not found
 
-点击顶部“打开存档”会直接弹出系统文件选择窗口；如果系统窗口不可用，把完整路径填进备用对话框。FC26/FC27 默认存档目录通常是：
+点击顶部“打开存档”会直接弹出系统文件选择窗口；如果系统窗口不可用，把完整路径填进备用对话框。FC27 默认存档目录通常是：
 
-Click “打开存档” to open the native file dialog. If it is unavailable, paste the full path into the fallback dialog. The default FC26/FC27 save folder is usually:
+Click “打开存档” to open the native file dialog. If it is unavailable, paste the full path into the fallback dialog. The default FC27 save folder is usually:
 
 ```text
-C:\Users\你的用户名\AppData\Local\EA SPORTS FC 26\settings\
 C:\Users\你的用户名\AppData\Local\EA SPORTS FC 27\settings\
 ```
 

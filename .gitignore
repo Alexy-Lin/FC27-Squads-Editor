@@ -3,6 +3,8 @@ __pycache__/
 .pytest_cache/
 
 # Local config / editor state
+.fc27-editor.json
+.fc27-save-*.tmp
 .fc26-editor.json
 .fc26-save-*.tmp
 

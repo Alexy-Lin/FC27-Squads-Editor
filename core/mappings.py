@@ -1,4 +1,4 @@
-"""FC26 display mappings and the fields exposed by the web editor."""
+"""FC27 display mappings and the fields exposed by the web editor."""
 
 from pathlib import Path
 
@@ -30,7 +30,7 @@ NATIONS_CN = _load_kv(CONFIG_ROOT / "nationalities.txt")
 
 FOOT_CN = {1: "右脚", 2: "左脚"}
 WEAK_FOOT_CN = {value: f"{value}/5" for value in range(1, 6)}
-# FC26 stores skill moves as 0..4, where 0 is the one-star value.
+# FC27 stores skill moves as 0..4, where 0 is the one-star value.
 SKILL_MOVES_CN = {value: f"{max(1, value)}/5" for value in range(5)}
 
 

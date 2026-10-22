@@ -32,7 +32,7 @@ class BirthdateConversionTests(unittest.TestCase):
         self.assertEqual(describe(day), "1954-07-15")
 
 
-@unittest.skipUnless(SAMPLE and SAMPLE.is_file(), "本机没有 FC26/FC27 样本存档")
+@unittest.skipUnless(SAMPLE and SAMPLE.is_file(), "本机没有 FC27 样本存档")
 class PlayerBirthdateEditorTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -1,6 +1,6 @@
-"""SavFile — FC26 squad save container (FBCHUNKS wrapper + embedded DB).
+"""SavFile — FC27 squad save container (FBCHUNKS wrapper + embedded DB).
 
-FC26 FBCHUNKS header is ~1178 bytes (vs 146 in FIFA19), with a different
+The FC27 FBCHUNKS header is ~1178 bytes (vs 146 in FIFA19), with a different
 DataSize offset formula.  This module handles both load and save."""
 
 import struct
@@ -12,12 +12,12 @@ from .meta_parser import MetaDatabase
 
 # Derive the FBCHUNKS header DataSize correction from the source file.
 #   FIFA19:   total - DataSize = 102   (18-byte prefix + 84-byte trailer)
-#   FC26:     total - DataSize = 1126  (verified from real save)
-FC26_DATASIZE_DIFF = 1126
+#   FC27:     total - DataSize = 1126  (verified from real save)
+DATASIZE_DIFF = 1126
 
 
 class SavFile:
-    """FC26 squad save file (.sav container)."""
+    """FC27 squad save file (.sav container)."""
 
     DB_MAGIC = b"DB\x00\x08"
 
@@ -27,7 +27,7 @@ class SavFile:
         self.filepath: Optional[Path] = None
 
     def load(self, filepath: Path, meta_db: Optional[MetaDatabase] = None):
-        """Load an FC26 .sav file."""
+        """Load an FC27 .sav file."""
         self.filepath = Path(filepath)
 
         with open(filepath, "rb") as f:
@@ -37,7 +37,7 @@ class SavFile:
         db_pos = data.find(self.DB_MAGIC)
         if db_pos == -1:
             raise ValueError(
-                f"Not a valid FC26 save file: DB signature not found in {filepath}"
+                f"Not a valid FC27 save file: DB signature not found in {filepath}"
             )
 
         self.fbchunks_header = data[:db_pos]
@@ -69,9 +69,9 @@ class SavFile:
                     fbchunks[i] = 0
 
         # 2) Update DataSize at bytes 14-17 (little-endian uint32).
-        #    Verified formula for FC 26:  DataSize = total_file_size - 1126
+        #    Verified formula for FC27:  DataSize = total_file_size - 1126
         total_size = len(fbchunks) + len(db_data)
-        new_data_size = total_size - FC26_DATASIZE_DIFF
+        new_data_size = total_size - DATASIZE_DIFF
         fbchunks[14:18] = struct.pack("<I", new_data_size)
 
         # Write: FBCHUNKS header + DB data
@@ -84,7 +84,7 @@ class SavFile:
     def summary(self) -> str:
         """Return a human-readable summary."""
         lines = [
-            f"FC26 Save File: {self.filepath}",
+            f"FC27 Save File: {self.filepath}",
             f"  FBCHUNKS header: {len(self.fbchunks_header)} bytes",
             "",
         ]

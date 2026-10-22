@@ -2,7 +2,7 @@ from typing import Dict, Iterable, List, Optional
 
 from core.name_resolver import NameResolver
 from core.sav_file import SavFile
-from core.traits import FC26_TRAIT1, FC26_TRAIT2, decode_traits
+from core.traits import TRAIT1, TRAIT2, decode_traits
 from core.types import EFieldTypes
 from .birthdates import DATE_FIELDS, from_text as parse_birthdate
 from .changes import FieldChange
@@ -71,7 +71,7 @@ class PlayerService:
         return changes
 
     def set_trait(self, player_id: int, bank: int, bit: int, enabled: bool, icon: bool = False):
-        mapping = FC26_TRAIT1 if bank == 1 else FC26_TRAIT2 if bank == 2 else None
+        mapping = TRAIT1 if bank == 1 else TRAIT2 if bank == 2 else None
         if mapping is None or bit not in {item[0] for item in mapping}:
             raise ValueError(f"trait{bank} 不支持 bit {bit}")
         field = ("icontrait" if icon else "trait") + str(bank)

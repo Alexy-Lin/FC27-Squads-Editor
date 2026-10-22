@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 from core.meta_parser import MetaDatabase
-from core.sav_file import FC26_DATASIZE_DIFF, SavFile
+from core.sav_file import DATASIZE_DIFF, SavFile
 from .changes import FieldChange, RecordChange
 
 
@@ -43,7 +43,7 @@ class SafeSaveService:
             raise ValueError(f"输出文件已存在，为避免覆盖请换一个路径：{destination}")
         destination.parent.mkdir(parents=True, exist_ok=True)
         counts_before = {name: len(table.records) for name, table in sav.db.tables.items()}
-        handle = tempfile.NamedTemporaryFile(prefix=".fc26-save-", suffix=".tmp", dir=destination.parent, delete=False)
+        handle = tempfile.NamedTemporaryFile(prefix=".fc27-save-", suffix=".tmp", dir=destination.parent, delete=False)
         temporary = Path(handle.name)
         handle.close()
         try:
@@ -77,11 +77,11 @@ class SafeSaveService:
         if len(data) < 18:
             raise ValueError("保存验证失败：文件过短")
         data_size = struct.unpack_from("<I", data, 14)[0]
-        if data_size != len(data) - FC26_DATASIZE_DIFF:
-            raise ValueError("保存验证失败：FC26 FBCHUNKS DataSize 不匹配")
+        if data_size != len(data) - DATASIZE_DIFF:
+            raise ValueError("保存验证失败：FBCHUNKS DataSize 不匹配")
         save_type_pos = data.find(b"SaveType_Squads\x00")
         if save_type_pos < 0 or data[save_type_pos + 16:save_type_pos + 24] != b"\x00" * 8:
-            raise ValueError("保存验证失败：FC26 FBCHUNKS 校验字节未归零")
+            raise ValueError("保存验证失败：FBCHUNKS 校验字节未归零")
         if data.find(b"DB\x00\x08") < 0:
             raise ValueError("保存验证失败：DB 容器不存在")
 

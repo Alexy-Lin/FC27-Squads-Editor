@@ -11,7 +11,7 @@ from .meta_parser import MetaDatabase
 
 
 class DbFile:
-    """FC26 DB file container — header, table directory, and all tables."""
+    """FC27 DB file container — header, table directory, and all tables."""
 
     MAGIC = b"DB\x00\x08"
 

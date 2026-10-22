@@ -1,4 +1,4 @@
-"""Compatibility entry point for the FC26 CLI."""
+"""Compatibility entry point for the FC27 CLI."""
 
 import sys
 

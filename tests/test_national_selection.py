@@ -8,7 +8,7 @@ from web_app import EditorState, create_app
 SAMPLE = find_latest_save()
 
 
-@unittest.skipUnless(SAMPLE and SAMPLE.is_file(), "本机没有 FC26/FC27 样本存档")
+@unittest.skipUnless(SAMPLE and SAMPLE.is_file(), "本机没有 FC27 样本存档")
 class NationalSelectionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

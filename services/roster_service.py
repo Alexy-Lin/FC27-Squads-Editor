@@ -9,7 +9,7 @@ from .changes import ChangeSet, FieldChange
 class RosterService:
     """In-place RrqT editor.
 
-    FC26 的安全路径只改现有关系记录的 teamid/jerseynumber/position，保持
+    FC27 的安全路径只改现有关系记录的 teamid/jerseynumber/position，保持
     RrqT 的记录数量和槽位布局不变。
     """
 

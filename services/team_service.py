@@ -77,4 +77,4 @@ class TeamService:
         return sorted(result, key=lambda item: (item["jerseynumber"] or 999, item["playerid"]))
 
     def update_fields(self, team_id: int, updates: Dict[str, str]) -> List[FieldChange]:
-        raise ValueError("FC26 球队基础数据保持只读；请使用球队阵容页调整球衣号码")
+        raise ValueError("FC27 球队基础数据保持只读；请使用球队阵容页调整球衣号码")

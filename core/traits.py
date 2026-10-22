@@ -1,6 +1,6 @@
-"""FC26 Trait definitions — decoded from bitmask fields.
+"""FC27 Trait definitions — decoded from bitmask fields.
 
-In FC26, CZUM has:
+In FC27, CZUM has:
   - juxV  = trait1  (30-bit mask, traits 0-29)
   - inAr  = trait2  (17-bit mask, traits 30-46)
 
@@ -14,7 +14,7 @@ from typing import List, Tuple
 
 # Bit position -> (field, short_name)
 # trait1 (juxV) — bits 0-29
-FC26_TRAIT1: List[Tuple[int, str]] = [
+TRAIT1: List[Tuple[int, str]] = [
     # 0-9: Common traits (likely same/similar to FIFA19)
     (0,  "Power Header"),
     (1,  "Dives Into Tackles"),
@@ -51,7 +51,7 @@ FC26_TRAIT1: List[Tuple[int, str]] = [
 ]
 
 # trait2 (inAr) — bits 0-16, mapped as bits 30-46 total
-FC26_TRAIT2: List[Tuple[int, str]] = [
+TRAIT2: List[Tuple[int, str]] = [
     (30, "Bicycle Kicks"),
     (31, "Backs Into Players"),
     (32, "Chip Shot (Dupe)"),
@@ -72,13 +72,13 @@ FC26_TRAIT2: List[Tuple[int, str]] = [
 ]
 
 # Build combined mapping
-_ALL_TRAITS = FC26_TRAIT1 + FC26_TRAIT2
+_ALL_TRAITS = TRAIT1 + TRAIT2
 
 
 def decode_traits(trait1_val: int, trait2_val: int) -> List[str]:
-    """Decode FC26 trait1/trait2 bitmasks into a list of trait name strings.
+    """Decode FC27 trait1/trait2 bitmasks into a list of trait name strings.
 
-    In FC26:
+    In FC27:
       - trait1 = juxV  (30-bit field)
       - trait2 = inAr  (17-bit field)
 
@@ -101,9 +101,9 @@ def format_traits(traits: List[str], indent: int = 0) -> str:
 # ── Specialities (computed from attribute thresholds) ──
 
 def decode_specialities(record: dict) -> List[str]:
-    """Compute FC26 specialities from attribute thresholds.
+    """Compute FC27 specialities from attribute thresholds.
 
-    Note: FC26 thresholds may differ from FIFA19.  These are best-effort.
+    Note: FC27 thresholds may differ from FIFA19.  These are best-effort.
     """
     s = []
     a = lambda name: record.get(name, 0) or 0
@@ -159,10 +159,10 @@ def format_specialities(specs: List[str], indent: int = 0) -> str:
     return "\n".join(f"{prefix}▸ {s}" for s in sorted(specs))
 
 
-# ── Icon traits (separate bitmask in FC26) ──
+# ── Icon traits (separate bitmask in FC27) ──
 
 def decode_icon_traits(icontrait1_val: int, icontrait2_val: int) -> List[str]:
-    """Decode FC26 icontrait1/icontrait2 (icon-specific traits).
+    """Decode FC27 icontrait1/icontrait2 (icon-specific traits).
 
     icontrait1 = OjQY (30-bit)
     icontrait2 = PqtG (17-bit)

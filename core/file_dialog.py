@@ -81,7 +81,7 @@ def tk_available() -> bool:
 
 
 def default_save_dir() -> Optional[Path]:
-    """First existing FC26 settings directory, used as the dialog's start folder."""
+    """First existing FC27 settings directory, used as the dialog's start folder."""
     try:
         from .config import save_dirs
     except ImportError:  # pragma: no cover - package layout fallback
@@ -157,7 +157,7 @@ def _pick_tk(initial_dir=None, title=DEFAULT_TITLE, filter_spec=SAVE_FILTER):
             parent=root,
             title=title,
             initialdir=str(initial_dir) if initial_dir else "",
-            filetypes=[("FC26 存档", "Squads*"), ("所有文件", "*.*")],
+            filetypes=[("Squads 存档", "Squads*"), ("所有文件", "*.*")],
         )
     finally:
         root.destroy()

@@ -1,4 +1,4 @@
-"""Bit-packed binary reader for FC26's FIFA DB format."""
+"""Bit-packed binary reader for FC27's FIFA DB format."""
 
 import struct
 from typing import Optional
@@ -34,7 +34,7 @@ class DbReader:
     def read_bits(self, depth: int) -> int:
         """Read `depth` bits LSB-first. Returns unsigned integer.
 
-        FC26 DB uses LSB-first bit order within each byte, and
+        FC27 DB uses LSB-first bit order within each byte, and
         little-endian byte order within multi-byte fields.
         """
         if depth == 0:
@@ -71,7 +71,7 @@ class DbReader:
     def read_string(self, length: int) -> str:
         """Read a null-terminated string of maximum byte length.
 
-        FC26 stores text as UTF-8. The raw bytes are accumulated,
+        FC27 stores text as UTF-8. The raw bytes are accumulated,
         then decoded as UTF-8 (falling back to Latin-1 for compatibility).
         """
         # Flush bit state — strings are byte-aligned

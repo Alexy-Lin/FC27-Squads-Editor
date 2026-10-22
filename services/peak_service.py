@@ -3,11 +3,11 @@
 Peak data sources, in priority order:
 
 1. ``data/fifa19_peak.csv`` — FIFA19 peak rows, keyed by the *public* player id
-   (same convention as the FC26 editor);
+   (same convention as the reference editor);
 2. ``data/fc27_peak_fallback.csv`` — exported from the 3DM legend save for
    players who do not exist in FIFA19 (post-2019 debuts), keyed by FC27 save id.
 
-Selection rules (ported from the FC26 editor and adapted to FC27):
+Selection rules (ported from the reference editor and adapted to FC27):
 
 * active players only (age >= ``min_age``), male, not part of the legend/ICON set;
 * only when the peak OVR is meaningfully high (``min_peak``), and only raise
@@ -52,7 +52,7 @@ FIELDS = [
 GK_FIELDS = ("gkdiving", "gkhandling", "gkkicking", "gkpositioning", "gkreflexes")
 
 #: Same-name players that a pure data match would mistake for the star
-#: (public ids, taken from the FC26 editor's findings).
+#: (public ids, taken from the reference editor's findings).
 SAME_NAME_IDS = {193080, 192387}
 
 

@@ -1,4 +1,4 @@
-"""Application settings and FC26/FC27 save discovery."""
+"""Application settings and FC27 save discovery."""
 
 import json
 import os
@@ -7,16 +7,17 @@ from typing import Optional
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONFIG_FILE = PROJECT_ROOT / ".fc26-editor.json"
+CONFIG_FILE = PROJECT_ROOT / ".fc27-editor.json"
+#: Previous config filename, still read so an existing install keeps its last save.
+LEGACY_CONFIG_FILE = PROJECT_ROOT / ".fc26-editor.json"
 
-#: Game folders searched for Squads saves, newest game first.  FC27 keeps the
-#: same ``settings`` layout as FC26; both are searched so the editor works on a
-#: machine that has only one of the two installed.
+#: Game folders searched for Squads saves.  FC27 is the target; the FC26 folder
+#: is kept as a compatibility fallback for installs that still use the old name.
 GAME_DIRS = ("EA SPORTS FC 27", "EA SPORTS FC 26")
 
 
 def save_dirs() -> list[Path]:
-    """Return existing FC26/FC27 settings directories for the current user."""
+    """Return existing FC27 settings directories for the current user."""
     home = Path.home()
     candidates = []
     for game in GAME_DIRS:
@@ -88,11 +89,13 @@ def choose_startup_save(last_save_path=None, fallback_dir=None) -> tuple[Optiona
 
 
 def load() -> dict:
-    try:
-        data = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    for path in (CONFIG_FILE, LEGACY_CONFIG_FILE):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
         return data if isinstance(data, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
+    return {}
 
 
 def save(values: dict) -> None:

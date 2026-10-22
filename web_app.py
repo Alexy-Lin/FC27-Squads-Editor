@@ -1,4 +1,4 @@
-"""FC26 save editor Web application.
+"""FC27 save editor Web application.
 
 The browser is only a client.  All binary parsing and writes happen in this
 process, and writes are staged in memory until the user explicitly saves.
@@ -22,7 +22,7 @@ from core.mappings import ATTRIBUTE_CATEGORIES, NATIONS_CN, OPTION_MAPS, POSITIO
 from core.meta_parser import MetaDatabase
 from core.name_resolver import NameResolver
 from core.sav_file import SavFile
-from core.traits import FC26_TRAIT1, FC26_TRAIT2
+from core.traits import TRAIT1, TRAIT2
 from services import birthdates
 from services.age_service import AgeService
 from services.changes import ChangeSet, FieldChange, RecordChange
@@ -232,9 +232,9 @@ class EditorState:
         def items(mapping, value, icon=False):
             result = []
             for bit, name in mapping:
-                local_bit = bit - 30 if mapping is FC26_TRAIT2 else bit
+                local_bit = bit - 30 if mapping is TRAIT2 else bit
                 result.append({
-                    "bank": 2 if mapping is FC26_TRAIT2 else 1,
+                    "bank": 2 if mapping is TRAIT2 else 1,
                     "bit": bit,
                     "name": ("图标 " if icon else "") + name,
                     "enabled": bool((value or 0) & (1 << local_bit)),
@@ -243,10 +243,10 @@ class EditorState:
             return result
 
         return {
-            "regular": items(FC26_TRAIT1, record.get("trait1")),
-            "regular2": items(FC26_TRAIT2, record.get("trait2")),
-            "icon": items(FC26_TRAIT1, record.get("icontrait1"), True),
-            "icon2": items(FC26_TRAIT2, record.get("icontrait2"), True),
+            "regular": items(TRAIT1, record.get("trait1")),
+            "regular2": items(TRAIT2, record.get("trait2")),
+            "icon": items(TRAIT1, record.get("icontrait1"), True),
+            "icon2": items(TRAIT2, record.get("icontrait2"), True),
         }
 
     def update_trait(self, player_id, body):
@@ -454,7 +454,7 @@ class EditorState:
         }
 
     def load_by_filename(self, filename):
-        """Resolve a save by name inside the known FC26/FC27 settings folders."""
+        """Resolve a save by name inside the known FC27 settings folders."""
         name = Path(str(filename or "")).name
         if not name:
             raise ValueError("没有提供存档文件名")
@@ -462,7 +462,7 @@ class EditorState:
         match = next((item for item in candidates if item.name == name), None)
         if match is None:
             raise ValueError(
-                f"在 FC26/FC27 存档目录里找不到 {name}（共 {len(candidates)} 个候选存档）"
+                f"在 FC27 存档目录里找不到 {name}（共 {len(candidates)} 个候选存档）"
             )
         self.load(match)
         return self.summary()
@@ -847,7 +847,7 @@ def create_app(state=None):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="FC26/FC27 存档编辑器 Web 前端")
+    parser = argparse.ArgumentParser(description="FC27 存档编辑器 Web 前端")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
@@ -863,7 +863,7 @@ def main():
     app = create_app(state)
     url = f"http://{args.host}:{args.port}/"
     print("========================================", flush=True)
-    print("FC26/FC27 存档编辑器 Web 服务已启动", flush=True)
+    print("FC27 存档编辑器 Web 服务已启动", flush=True)
     print(f"服务地址：{url}", flush=True)
     if state.sav.filepath:
         print(f"当前存档：{state.sav.filepath.name}", flush=True)

@@ -1,4 +1,4 @@
-"""FC26 DB field type enums and constants."""
+"""FC27 DB field type enums and constants."""
 
 from enum import IntEnum
 

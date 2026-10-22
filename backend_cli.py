@@ -1,4 +1,4 @@
-"""FC26 Save Editor command-line interface.
+"""FC27 Save Editor command-line interface.
 
 Examples:
   python backend_cli.py Squads... --search Messi
@@ -104,7 +104,7 @@ def save_changes(sav, meta, changes, output_path=None):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description="FC26/FC27 Squads 存档编辑器")
+    parser = argparse.ArgumentParser(description="FC27 Squads 存档编辑器")
     parser.add_argument("save_file", type=Path, help="Squads 存档路径")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--search", metavar="TEXT", help="按球员姓名或 ID 搜索")
