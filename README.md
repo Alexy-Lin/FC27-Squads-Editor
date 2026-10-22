@@ -8,7 +8,7 @@ EA SPORTS FC 26/27 `Squads` 存档编辑器，提供中文 Web 界面、命令�
 
 - 搜索球员：姓名、中文名或球员 ID / Search players by name, Chinese name, or player ID
 - 按国籍、位置和总评筛选 / Filter by nationality, position, and overall rating
-- 球员详情页优先显示内置头像，未匹配时显示姓名首字母 / Show bundled player heads when available, with an initial fallback
+- 球员详情页在 `data/heads/` 下有对应头像时显示头像，未匹配时显示姓名首字母（头像为 EA 素材，仓库不附带）/ Show player heads from `data/heads/` when present, with an initial fallback (head images are EA assets and are not bundled)
 - 修改总评、潜力、能力值、位置、角色、惯用脚、逆足、花式和身体数据（生日按 `YYYY-MM-DD` 日期控件编辑）/ Edit ratings, potential, attributes, positions, roles, feet, skill moves, physical data, and birthdate as a real date
 - 修改普通特性和图标特性 / Edit regular and icon traits
 - 查看球队阵容并批量修改球衣号码 / View squads and batch-edit shirt numbers
@@ -221,6 +221,6 @@ python -m unittest discover -s tests -v
 
 The original source code and documentation in this project are licensed under the [Apache License 2.0](LICENSE).
 
-仓库中随附的游戏衍生数据、数据库结构文件、球员姓名和头像等资源可能受 EA 或其他权利人的版权及使用条款约束；Apache License 2.0 不转让这些第三方权利。
+仓库中随附的游戏衍生数据、数据库结构文件、球员姓名等资源可能受 EA 或其他权利人的版权及使用条款约束；Apache License 2.0 不转让这些第三方权利。球员头像等 EA 素材不随仓库分发。
 
-Bundled game-derived data, database schema files, player names, player head images, and other third-party materials may be subject to the copyrights and terms of their respective owners. Apache License 2.0 does not transfer those third-party rights.
+Bundled game-derived data, database schema files, player names, and other third-party materials may be subject to the copyrights and terms of their respective owners. Apache License 2.0 does not transfer those third-party rights. Player head images and other EA assets are not distributed with this repository.
